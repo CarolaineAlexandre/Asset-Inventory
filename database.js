@@ -37,19 +37,33 @@ app.get('/funcionarios', async (req, res) => {
     }
 });
 
-// Criar novo funcionário
+// Valida a quantidade de ativos
+function validateAssets(funcionario) {
+    const assets = ['Monitor1', 'Monitor2', 'Teclado', 'Mouse', 'Headset', 'Celular'];
+    const activeAssets = assets.filter(asset => funcionario[asset] && funcionario[asset].Presente === 'SIM');
+    return activeAssets.length <= 6;
+}
+
+// Insere funcionario
 app.post('/funcionario', async (req, res) => {
     try {
+        const novoFuncionario = req.body;
+        console.log(novoFuncionario);
+
+        if (!validateAssets(novoFuncionario)) {
+            return res.status(400).send('Quantidade de ativos excedida.');
+        }
+
         const db = client.db(dbName);
-        const result = await db.collection(collectionName).insertOne(req.body);
+        const result = await db.collection(collectionName).insertOne(novoFuncionario);
 
         if (result.acknowledged) {
-            const novoFuncionario = {
+            const funcionarioInserido = {
                 _id: result.insertedId,
-                ...req.body
+                ...novoFuncionario
             };
             console.log('Novo funcionário inserido');
-            res.status(201).json(novoFuncionario);
+            res.status(201).json(funcionarioInserido);
         } else {
             throw new Error('Nenhum documento inserido.');
         }
@@ -72,17 +86,16 @@ app.delete('/funcionario/:id', async (req, res) => {
             return;
         }
 
-        // Um funcionário só pode ser excluído se não houver nenhum ativo configurado para ele
         const ativosConfigurados = [
-            funcionario.Monitor1.Presente,
-            funcionario.Monitor2.Presente,
-            funcionario.Teclado.Presente,
-            funcionario.Mouse.Presente,
-            funcionario.Desktop.Presente,
-            funcionario.Nobreak.Presente,
-            funcionario.Headset.Presente,
-            funcionario.Celular.Presente,
-            funcionario.Acessórios.Presente
+            funcionario.Monitor1?.Presente,
+            funcionario.Monitor2?.Presente,
+            funcionario.Teclado?.Presente,
+            funcionario.Mouse?.Presente,
+            funcionario.Desktop?.Presente,
+            funcionario.Nobreak?.Presente,
+            funcionario.Headset?.Presente,
+            funcionario.Celular?.Presente,
+            funcionario.Acessórios?.Presente
         ].some(presente => presente === "SIM");
 
         if (ativosConfigurados) {
@@ -104,7 +117,6 @@ app.delete('/funcionario/:id', async (req, res) => {
         res.status(500).send('Erro ao deletar o funcionário.');
     }
 });
-
 
 // Atualizar o nome do funcionário tendo como referência do documento o próprio CPF
 app.put('/funcionario/nome', async (req, res) => {
@@ -139,138 +151,77 @@ app.put('/funcionario/nome', async (req, res) => {
     }
 });
 
+// Endpoints para os diferentes ativos
+const ativos = [
+    'Notebook', 'Monitor1', 'Monitor2', 'Teclado', 'Mouse', 
+    'Nobreak', 'Desktop', 'Headset', 'Celular', 'Acessorios'
+];
 
-// Atualizar a informação de um ativo
-// app.put('/funcionario/:cpf/ativo/:ativo', async (req, res) => {
-//     const { cpf, ativo } = req.params;
-//     const novoAtivo = req.body;
+ativos.forEach(ativo => {
+    // Atualizar a informação do ativo
+    app.put(`/funcionario/:cpf/ativo/${ativo}`, async (req, res) => {
+        const { cpf } = req.params;
+        const novoAtivo = req.body;
 
-//     try {
-//         const db = client.db(dbName);
-//         const update = {};
+        try {
+            const db = client.db(dbName);
+            const update = {};
 
-//         update[ativo] = novoAtivo;
+            update[ativo] = novoAtivo;
 
-//         const result = await db.collection(collectionName).updateOne(
-//             { CPF: cpf },
-//             { $set: update }
-//         );
+            const result = await db.collection(collectionName).updateOne(
+                { CPF: cpf },
+                { $set: update }
+            );
 
-//         if (result.matchedCount === 0) {
-//             res.status(404).send(`Funcionário com CPF ${cpf} não encontrado.`);
-//             return;
-//         }
+            if (result.matchedCount === 0) {
+                res.status(404).send(`Funcionário com CPF ${cpf} não encontrado.`);
+                return;
+            }
 
-//         if (result.modifiedCount === 1) {
-//             res.status(200).send(`Ativo ${ativo} do funcionário com CPF ${cpf} atualizado.`);
-//         } else {
-//             res.status(304).send('Nenhuma alteração feita no ativo do funcionário.');
-//         }
-//     } catch (err) {
-//         console.error('Erro ao atualizar o ativo do funcionário:', err);
-//         res.status(500).send('Erro ao atualizar o ativo do funcionário.');
-//     }
-// });
+            if (result.modifiedCount === 1) {
+                res.status(200).send(`Ativo ${ativo} do funcionário com CPF ${cpf} atualizado.`);
+            } else {
+                res.status(304).send('Nenhuma alteração feita no ativo do funcionário.');
+            }
+        } catch (err) {
+            console.error('Erro ao atualizar o ativo do funcionário:', err);
+            res.status(500).send('Erro ao atualizar o ativo do funcionário.');
+        }
+    });
 
+    // Limpar a informação do ativo
+    app.put(`/funcionario/:cpf/limpar-ativo/${ativo}`, async (req, res) => {
+        const { cpf } = req.params;
 
-// // Função genérica para atualizar as informações de um ativo
-// async function updateAtivo(cpf, ativo, dadosAtivo) {
-//     const db = client.db(dbName);
-//     const update = {};
-//     update[ativo] = dadosAtivo;
+        try {
+            const db = client.db(dbName);
+            const update = {};
 
-//     const result = await db.collection(collectionName).updateOne(
-//         { CPF: cpf },
-//         { $set: update }
-//     );
+            update[ativo] = {};
 
-//     return result;
-// }
+            const result = await db.collection(collectionName).updateOne(
+                { CPF: cpf },
+                { $unset: update }
+            );
 
-// // Função genérica para limpar as informações de um ativo
-// async function clearAtivo(cpf, ativo) {
-//     const db = client.db(dbName);
-//     const update = {};
+            if (result.matchedCount === 0) {
+                res.status(404).send(`Funcionário com CPF ${cpf} não encontrado.`);
+                return;
+            }
 
-//     // Define as informações padrão para cada tipo de ativo
-//     switch (ativo) {
-//         case 'Monitor1':
-//         case 'Monitor2':
-//         case 'Teclado':
-//         case 'Mouse':
-//         case 'Headset':
-//         case 'Celular':
-//             update[ativo] = {
-//                 Presente: "NÃO",
-//                 Modelo: "",
-//                 'Número de Série': "",
-//                 Observação: ""
-//             };
-//             break;
-//         case 'Desktop':
-//             update[ativo] = {
-//                 Presente: "NÃO",
-//                 TAG: "",
-//                 Modelo: "",
-//                 'Número de Série': "",
-//                 Versão: "",
-//                 Características: "",
-//                 Observação: ""
-//             };
-//             break;
-//         case 'Acessórios':
-//             update[ativo] = {
-//                 Presente: "NÃO",
-//                 'Suporte notebook': "",
-//                 'Mouse pad': "",
-//                 Observação: ""
-//             };
-//             break;
-//         case 'Nobreak':
-//             update[ativo] = {
-//                 Presente: "NÃO",
-//                 Modelo: "",
-//                 'Número de Série': "",
-//                 Observação: ""
-//             };
-//             break;
-//         default:
-//             throw new Error('Ativo não reconhecido.');
-//     }
-
-//     const result = await db.collection(collectionName).updateOne(
-//         { CPF: cpf },
-//         { $set: update }
-//     );
-
-//     return result;
-// }
-
-// // Endpoints atualizados
-
-// app.put('/notebook/:cpf', async (req, res) => {
-//     try {
-//         const { cpf } = req.params;
-//         const { notebook } = req.body;
-//         const result = await updateAtivo(cpf, 'Notebook', notebook);
-//         res.status(200).json(result);
-//     } catch (error) {
-//         res.status(500).json({ message: 'Erro ao inserir notebook', error: error });
-//     }
-// });
-
-// app.put('/clear_notebook/:cpf', async (req, res) => {
-//     try {
-//         const { cpf } = req.params;
-//         const result = await clearAtivo(cpf, 'Notebook');
-//         res.status(200).json(result);
-//     } catch (error) {
-//         res.status(500).json({ message: 'Erro ao limpar notebook', error: error });
-//     }
-// });
-
-
+            if (result.modifiedCount === 1) {
+                res.status(200).send(`Ativo ${ativo} do funcionário com CPF ${cpf} limpo.`);
+            } else {
+                res.status(304).send('Nenhuma alteração feita no ativo do funcionário.');
+            }
+        } catch (err) {
+            console.error('Erro ao limpar o ativo do funcionário:', err);
+            res.status(500).send('Erro ao limpar o ativo do funcionário.');
+        }
+    });
+});
 
 app.listen(port, () => {
-    console.log(`Servidor rodando na porta`, port);
+    console.log(`Servidor rodando na porta ${port}`);
 });
