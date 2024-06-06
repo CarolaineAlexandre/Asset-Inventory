@@ -12,13 +12,9 @@ To get started with this API, follow these steps:
    ```
    npm install
    ```
-4. Start the database server by running:
+4. Start the database and API server by running:
    ```
    node database.js
-   ```
-5. Start the API server by running:
-   ```
-   node index.js
    ```
 
 ## API Endpoints
